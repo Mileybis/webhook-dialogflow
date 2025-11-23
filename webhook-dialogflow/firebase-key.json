@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "organizador-tareas-bot",
+  "private_key_id": "8f00aeeea2c599563b9f48a8c14fbdac112c2402",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEugIBADANBgkqhkiG9w0BAQEFAASCBKQwggSgAgEAAoIBAQCRA5x0v+d6V0jY\ne7olMnHigfx6A5EBiULJUiLZeJxdt2SMXXqfRlReRmnDwrI4BvgJlTYvrZInUJp1\nuuk538EXsSxR+0EXXaLMBja32pdWRM+QoXYHA9lz04kxsSwUyo2Id8SsCUrwyET6\nMiuRIeh8OSpmIivtB1DWGQYDrYo1mF49sNBvuJ4lSLV4t0lI2AOcaEhgQDqW9r7u\npR2mV8SsDLhGQD03pJoWc/hRpBHYwFWGbDPR6G9tZcmdA9OCUn1ewZZKS0OrgiyZ\n8upM702qxuNZXce8+hJHCe/WlZyAvasK0686e7pJytCr+b0T/mkObpM2PwePUu0v\nhPZWX7kxAgMBAAECgf9HPkRErMNHElAc4IG4eequzWMCJB5paCCs/PKsxNnixjwF\nJH0fIv5FaB0t/8kZnX2JDQrCAb7RcdgbXuiWIPJMds6/Ysu9Hv42yMFj3LsyYZFY\nDPsKFz9jQtnJgAbtcAB4uzP0ZocFebPpohxQAR38FFmwM7mWNFySfVi8aysriM09\nSFWiOKWgQZHWEMiZ2VSCVg0G3Esln2ix9jTXKBuW5fW6o/k5FGEteAxqJh8UOU/d\nabYKFqcIO++C0w1mbW5yBPDY+SqX1xPWtmntbru17Nfvrg0+PgU4zNLr88PzNSI1\nL3RbL9ey9vtRXMDrWznROwD2obWEVwnW2CdlTQECgYEAxK3kGtqOQMxE9V401c1X\nYeLmWUiszzZSXPRAUR9G1Wf/WOLNXxHzobmG2oqWbvfEnbhWnepoMrtr2+MeM/zQ\nqx22SjOOacumXweRhDvbFHwnJRxUom1w0nqj6ZBB/1o2q2M/rqPykjVhD6/PUoTJ\n9rEuXPdh/4ggFQQ/DLbM2QECgYEAvMCFcgg5cN48pDmdOChqVvTVTr2EmqTfd2yZ\nfzOYOknZc/4bpuqurvzDRMXYg5YdJKXklIRiSkYS7bGQrw0eFofgUWfy46l7XZjq\nBedTa092X2fcF/CryClgdgcBQ4kMEL8kZp108uGfSGc3izB1wIC0o5hxvAhJP7Jn\nC4Z6MDECgYB1j08qMfsXhkGtvGquZTfW/a4cLhGFJf4jK6gKFTzcsHXzplWFfxB2\nWZPeqznyCE1QzO+RIpy3vklhPKdAAdyke3ULczeryxud78MuHCz+WJt5Vi7Mi8gF\nN2MkZ6LbRAwrc36MH9kNRbTHkJnGxDKILy38Sa4c9Dvg9BHPwrA9AQKBgCIHN0ea\nkfh2KEqXFG/2YU1x8C603f4fMSZPjtCu1YfUnn5Z1lReRMXJTc7NOD5oxrI/shjQ\nUQQA5BK0C1hzrfPz5Q3oBpLikBoMokwUKybSeY2zpKswOVfplblRg/nP8DvoqcBS\nLK5I3LVp3kqanu/ohChmKEL033e7SvZ59PdRAoGAGbO39q2LXN2TRVIl7tTiXYo4\nDeq6K9+Un631YOItLED4Rc6DVSYrHtH3DD52tQ7xnnaXSPKIRIyFORXV4gdj4lSL\nOPt7qykZ89AlewLPVZJLggQqcYA5l+hIuiTPlP17aAPyNvTy0n5ZgHIEwpiJrpjC\n+63y+dYTezyBoNBK9OI=\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@organizador-tareas-bot.iam.gserviceaccount.com",
+  "client_id": "117222335300916740070",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40organizador-tareas-bot.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
