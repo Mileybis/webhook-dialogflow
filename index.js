@@ -64,25 +64,24 @@ app.post("/webhook", async (req, res) => {
   // VER TAREAS
   // ------------------------------------------
   if (intent === "VerTareas") {
-    const snapshot = await db.collection("tareas").get();
+  const snapshot = await db.collection("tareas").get();
 
-    if (snapshot.empty) {
-      return res.json({
-        fulfillmentText: "No tienes tareas guardadas.",
-      });
-    }
-
-    let respuesta = "📋 *Estas son tus tareas:*\n\n";
-
-    snapshot.forEach((doc) => {
-      const d = doc.data();
-      respuesta += `• **${d.tarea}**\n   📅 ${formatearFecha(
-        d.fecha
-      )}   ⏰ ${formatearHora(d.hora)}\n\n`;
+  if (snapshot.empty) {
+    return res.json({
+      fulfillmentText: "No tienes tareas guardadas.",
     });
-
-    return res.json({ fulfillmentText: respuesta });
   }
+
+  let respuesta = "Estas son tus tareas:\n\n";
+
+  snapshot.forEach((doc) => {
+    const d = doc.data();
+    respuesta += `• ${d.tarea} — ${formatearFecha(d.fecha)} ${formatearHora(d.hora)}\n`;
+  });
+
+  return res.json({ fulfillmentText: respuesta });
+}
+
 
   // ------------------------------------------
   // ELIMINAR TAREA
@@ -113,5 +112,6 @@ app.post("/webhook", async (req, res) => {
 
 // Iniciar servidor
 app.listen(3000, () => console.log("Webhook ejecutándose en puerto 3000"));
+
 
 
