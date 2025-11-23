@@ -2,7 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const admin = require("firebase-admin");
 
-// Cargar la clave desde variable de entorno
+// Cargar firebase key desde variable de entorno
 const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
 admin.initializeApp({
@@ -10,82 +10,99 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-
 const app = express();
 app.use(bodyParser.json());
 
-// Función para formatear fecha
-function formatearFecha(fechaISO) {
-  if (!fechaISO) return "";
-  const fecha = new Date(fechaISO);
-  const dia = String(fecha.getUTCDate()).padStart(2, "0");
-  const mes = String(fecha.getUTCMonth() + 1).padStart(2, "0");
-  const año = String(fecha.getUTCFullYear()).slice(2);
-  return `${dia}/${mes}/${año}`;
+// --------------------
+// FORMATEADORES
+// --------------------
+function formatearFechaISO(fechaISO) {
+  // Convierte "2025-11-29" a "29/11/2025"
+  const [a, m, d] = fechaISO.split("-");
+  return `${d}/${m}/${a}`;
 }
 
-// Función para formatear hora
-function formatearHora(horaISO) {
-  if (!horaISO) return "";
-  const fecha = new Date(horaISO);
-  let horas = fecha.getUTCHours();
-  let minutos = fecha.getUTCMinutes();
+function formatearHoraBonita(hora24) {
+  // Convierte "19:00" a "7:00 pm"
+  let [h, m] = hora24.split(":");
+  h = parseInt(h);
 
-  const ampm = horas >= 12 ? "pm" : "am";
-  horas = horas % 12;
-  horas = horas ? horas : 12; // Si es 0 → 12
+  const sufijo = h >= 12 ? "pm" : "am";
+  let h12 = h % 12;
+  h12 = h12 === 0 ? 12 : h12;
 
-  minutos = minutos === 0 ? "" : `:${String(minutos).padStart(2, "0")}`;
-
-  return `${horas}${minutos} ${ampm}`;
+  return `${h12}:${m} ${sufijo}`;
 }
+
+// --------------------
+// PROCESAR ENTRADAS
+// --------------------
+function extraerSoloFecha(dateTime) {
+  const fecha = new Date(dateTime);
+  return fecha.toISOString().split("T")[0]; // "YYYY-MM-DD"
+}
+
+function extraerSoloHora(dateTime) {
+  const fecha = new Date(dateTime);
+  const hh = fecha.getHours().toString().padStart(2, "0");
+  const mm = fecha.getMinutes().toString().padStart(2, "0");
+  return `${hh}:${mm}`; // "HH:mm"
+}
+
+// --------------------
+// WEBHOOK
+// --------------------
 
 app.post("/webhook", async (req, res) => {
   const intent = req.body.queryResult.intent.displayName;
 
-  // ------------------------------------------
+  // --------------------------
   // CREAR TAREA
-  // ------------------------------------------
+  // --------------------------
   if (intent === "CrearTarea") {
     const tarea = req.body.queryResult.parameters.tarea;
-    const fecha = req.body.queryResult.parameters.fecha;
-    const hora = req.body.queryResult.parameters.hora;
+    const fechaRaw = req.body.queryResult.parameters.fecha;
+    const horaRaw = req.body.queryResult.parameters.hora;
+
+    const fecha = extraerSoloFecha(fechaRaw);
+    const hora = extraerSoloHora(horaRaw);
 
     await db.collection("tareas").add({ tarea, fecha, hora });
 
     return res.json({
-      fulfillmentText: `He guardado la tarea: ${tarea} el ${formatearFecha(
+      fulfillmentText: `Tarea guardada: ${tarea} — ${formatearFechaISO(
         fecha
-      )} a las ${formatearHora(hora)}.`,
+      )} ${formatearHoraBonita(hora)}`,
     });
   }
 
-  // ------------------------------------------
+  // --------------------------
   // VER TAREAS
-  // ------------------------------------------
+  // --------------------------
   if (intent === "VerTareas") {
-  const snapshot = await db.collection("tareas").get();
+    const snapshot = await db.collection("tareas").get();
 
-  if (snapshot.empty) {
-    return res.json({
-      fulfillmentText: "No tienes tareas guardadas.",
+    if (snapshot.empty) {
+      return res.json({
+        fulfillmentText: "No tienes tareas guardadas.",
+      });
+    }
+
+    let respuesta = "Estas son tus tareas:\n\n";
+
+    snapshot.forEach((doc) => {
+      const d = doc.data();
+      respuesta += `• ${d.tarea} — ${formatearFechaISO(
+        d.fecha
+      )} ${formatearHoraBonita(d.hora)}\n`;
     });
+
+    return res.json({ fulfillmentText: respuesta });
   }
 
-  let respuesta = "Estas son tus tareas:\n\n";
-
-  snapshot.forEach((doc) => {
-    const d = doc.data();
-    respuesta += `• ${d.tarea} — ${formatearFecha(d.fecha)} ${formatearHora(d.hora)}\n`;
-  });
-
-  return res.json({ fulfillmentText: respuesta });
-}
-
-
-  // ------------------------------------------
+  // --------------------------
   // ELIMINAR TAREA
-  // ------------------------------------------
+  // --------------------------
   if (intent === "EliminarTarea") {
     const tarea = req.body.queryResult.parameters.tarea;
 
@@ -103,15 +120,21 @@ app.post("/webhook", async (req, res) => {
     snapshot.forEach((doc) => doc.ref.delete());
 
     return res.json({
-      fulfillmentText: `He eliminado la tarea: ${tarea}.`,
+      fulfillmentText: `Tarea eliminada: ${tarea}`,
     });
   }
 
+  // --------------------------
+  // DEFAULT
+  // --------------------------
   res.json({ fulfillmentText: "No entendí tu solicitud." });
 });
 
-// Iniciar servidor
+// ----------------------------
+// Servidor local (Render ignora esto)
+// ----------------------------
 app.listen(3000, () => console.log("Webhook ejecutándose en puerto 3000"));
+
 
 
 
