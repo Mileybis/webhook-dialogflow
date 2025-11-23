@@ -14,9 +14,38 @@ const db = admin.firestore();
 const app = express();
 app.use(bodyParser.json());
 
+// Función para formatear fecha
+function formatearFecha(fechaISO) {
+  if (!fechaISO) return "";
+  const fecha = new Date(fechaISO);
+  const dia = String(fecha.getUTCDate()).padStart(2, "0");
+  const mes = String(fecha.getUTCMonth() + 1).padStart(2, "0");
+  const año = String(fecha.getUTCFullYear()).slice(2);
+  return `${dia}/${mes}/${año}`;
+}
+
+// Función para formatear hora
+function formatearHora(horaISO) {
+  if (!horaISO) return "";
+  const fecha = new Date(horaISO);
+  let horas = fecha.getUTCHours();
+  let minutos = fecha.getUTCMinutes();
+
+  const ampm = horas >= 12 ? "pm" : "am";
+  horas = horas % 12;
+  horas = horas ? horas : 12; // Si es 0 → 12
+
+  minutos = minutos === 0 ? "" : `:${String(minutos).padStart(2, "0")}`;
+
+  return `${horas}${minutos} ${ampm}`;
+}
+
 app.post("/webhook", async (req, res) => {
   const intent = req.body.queryResult.intent.displayName;
 
+  // ------------------------------------------
+  // CREAR TAREA
+  // ------------------------------------------
   if (intent === "CrearTarea") {
     const tarea = req.body.queryResult.parameters.tarea;
     const fecha = req.body.queryResult.parameters.fecha;
@@ -25,10 +54,15 @@ app.post("/webhook", async (req, res) => {
     await db.collection("tareas").add({ tarea, fecha, hora });
 
     return res.json({
-      fulfillmentText: `He guardado la tarea: ${tarea} (${fecha} ${hora})`,
+      fulfillmentText: `He guardado la tarea: ${tarea} el ${formatearFecha(
+        fecha
+      )} a las ${formatearHora(hora)}.`,
     });
   }
 
+  // ------------------------------------------
+  // VER TAREAS
+  // ------------------------------------------
   if (intent === "VerTareas") {
     const snapshot = await db.collection("tareas").get();
 
@@ -38,15 +72,21 @@ app.post("/webhook", async (req, res) => {
       });
     }
 
-    let respuesta = "Aquí están tus tareas:\n";
+    let respuesta = "📋 *Estas son tus tareas:*\n\n";
+
     snapshot.forEach((doc) => {
       const d = doc.data();
-      respuesta += `• ${d.tarea} (${d.fecha} ${d.hora})\n`;
+      respuesta += `• **${d.tarea}**\n   📅 ${formatearFecha(
+        d.fecha
+      )}   ⏰ ${formatearHora(d.hora)}\n\n`;
     });
 
     return res.json({ fulfillmentText: respuesta });
   }
 
+  // ------------------------------------------
+  // ELIMINAR TAREA
+  // ------------------------------------------
   if (intent === "EliminarTarea") {
     const tarea = req.body.queryResult.parameters.tarea;
 
@@ -64,7 +104,7 @@ app.post("/webhook", async (req, res) => {
     snapshot.forEach((doc) => doc.ref.delete());
 
     return res.json({
-      fulfillmentText: `He eliminado la tarea: ${tarea}`,
+      fulfillmentText: `He eliminado la tarea: ${tarea}.`,
     });
   }
 
@@ -73,3 +113,5 @@ app.post("/webhook", async (req, res) => {
 
 // Iniciar servidor
 app.listen(3000, () => console.log("Webhook ejecutándose en puerto 3000"));
+
+
