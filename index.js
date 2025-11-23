@@ -2,7 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const admin = require("firebase-admin");
 
-// Cargar firebase key desde variable de entorno
+// Cargar clave desde variable de entorno
 const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
 admin.initializeApp({
@@ -10,75 +10,99 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
+
 const app = express();
 app.use(bodyParser.json());
 
-// --------------------
-// FORMATEADORES
-// --------------------
-function formatearFechaISO(fechaISO) {
-  // Convierte "2025-11-29" a "29/11/2025"
-  const [a, m, d] = fechaISO.split("-");
-  return `${d}/${m}/${a}`;
+// Función para formatear fecha
+function formatearFecha(fechaISO) {
+  if (!fechaISO) return "";
+  const fecha = new Date(fechaISO);
+  return fecha.toLocaleDateString("es-PA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
-
-function formatearHoraBonita(hora24) {
-  // Convierte "19:00" a "7:00 pm"
-  let [h, m] = hora24.split(":");
-  h = parseInt(h);
-
-  const sufijo = h >= 12 ? "pm" : "am";
-  let h12 = h % 12;
-  h12 = h12 === 0 ? 12 : h12;
-
-  return `${h12}:${m} ${sufijo}`;
-}
-
-// --------------------
-// PROCESAR ENTRADAS
-// --------------------
-function extraerSoloFecha(dateTime) {
-  const fecha = new Date(dateTime);
-  return fecha.toISOString().split("T")[0]; // "YYYY-MM-DD"
-}
-
-function extraerSoloHora(dateTime) {
-  const fecha = new Date(dateTime);
-  const hh = fecha.getHours().toString().padStart(2, "0");
-  const mm = fecha.getMinutes().toString().padStart(2, "0");
-  return `${hh}:${mm}`; // "HH:mm"
-}
-
-// --------------------
-// WEBHOOK
-// --------------------
 
 app.post("/webhook", async (req, res) => {
   const intent = req.body.queryResult.intent.displayName;
+  const params = req.body.queryResult.parameters;
+  const contexts = req.body.queryResult.outputContexts;
 
-  // --------------------------
-  // CREAR TAREA
-  // --------------------------
+  // ---------------------------------------
+  //  INTENT: CrearTarea
+  // ---------------------------------------
   if (intent === "CrearTarea") {
-    const tarea = req.body.queryResult.parameters.tarea;
-    const fechaRaw = req.body.queryResult.parameters.fecha;
-    const horaRaw = req.body.queryResult.parameters.hora;
+    let tarea = params.tarea;
+    let fecha = params.fecha;
+    let hora = params.hora.trim().toLowerCase();
 
-    const fecha = extraerSoloFecha(fechaRaw);
-    const hora = extraerSoloHora(horaRaw);
+    // Detectar si ya trae am/pm
+    const tieneAMPM = hora.includes("am") || hora.includes("pm");
 
+    if (!tieneAMPM) {
+      // Guardar temporalmente en contexto
+      return res.json({
+        fulfillmentText: `¿Quieres decir ${hora} *am* o *pm*?`,
+        outputContexts: [
+          {
+            name: `${req.body.session}/contexts/esperar_amm_pm`,
+            lifespanCount: 3,
+            parameters: { tarea, fecha, hora },
+          },
+        ],
+      });
+    }
+
+    // Guardar cuando hora ya tiene AM/PM
     await db.collection("tareas").add({ tarea, fecha, hora });
 
     return res.json({
-      fulfillmentText: `Tarea guardada: ${tarea} — ${formatearFechaISO(
+      fulfillmentText: `Tarea guardada: ${tarea} — ${formatearFecha(
         fecha
-      )} ${formatearHoraBonita(hora)}`,
+      )} ${hora}`,
     });
   }
 
-  // --------------------------
-  // VER TAREAS
-  // --------------------------
+  // ---------------------------------------
+  //  RESPUESTA del usuario: "am" o "pm"
+  // ---------------------------------------
+  if (intent === "ElegirAMPM") {
+    let ctx = contexts.find((c) => c.name.includes("esperar_amm_pm"));
+
+    if (!ctx) {
+      return res.json({
+        fulfillmentText: "No entendí, intenta de nuevo.",
+      });
+    }
+
+    let { tarea, fecha, hora } = ctx.parameters;
+    let respuesta = req.body.queryResult.queryText.toLowerCase();
+
+    if (!["am", "pm"].includes(respuesta))
+      return res.json({
+        fulfillmentText: "Por favor responde solo *am* o *pm*.",
+      });
+
+    let horaCompleta = `${hora} ${respuesta}`;
+
+    await db.collection("tareas").add({
+      tarea,
+      fecha,
+      hora: horaCompleta,
+    });
+
+    return res.json({
+      fulfillmentText: `Perfecto, tarea guardada: ${tarea} — ${formatearFecha(
+        fecha
+      )} ${horaCompleta}`,
+    });
+  }
+
+  // ---------------------------------------
+  //  INTENT: VerTareas
+  // ---------------------------------------
   if (intent === "VerTareas") {
     const snapshot = await db.collection("tareas").get();
 
@@ -88,23 +112,21 @@ app.post("/webhook", async (req, res) => {
       });
     }
 
-    let respuesta = "Estas son tus tareas:\n\n";
+    let respuesta = "Estas son tus tareas:\n";
 
     snapshot.forEach((doc) => {
       const d = doc.data();
-      respuesta += `• ${d.tarea} — ${formatearFechaISO(
-        d.fecha
-      )} ${formatearHoraBonita(d.hora)}\n`;
+      respuesta += `• ${d.tarea} — ${formatearFecha(d.fecha)} ${d.hora}\n`;
     });
 
     return res.json({ fulfillmentText: respuesta });
   }
 
-  // --------------------------
-  // ELIMINAR TAREA
-  // --------------------------
+  // ---------------------------------------
+  //  INTENT: EliminarTarea
+  // ---------------------------------------
   if (intent === "EliminarTarea") {
-    const tarea = req.body.queryResult.parameters.tarea;
+    const tarea = params.tarea;
 
     const snapshot = await db
       .collection("tareas")
@@ -120,19 +142,14 @@ app.post("/webhook", async (req, res) => {
     snapshot.forEach((doc) => doc.ref.delete());
 
     return res.json({
-      fulfillmentText: `Tarea eliminada: ${tarea}`,
+      fulfillmentText: `He eliminado la tarea: ${tarea}`,
     });
   }
 
-  // --------------------------
-  // DEFAULT
-  // --------------------------
   res.json({ fulfillmentText: "No entendí tu solicitud." });
 });
 
-// ----------------------------
-// Servidor local (Render ignora esto)
-// ----------------------------
+// Iniciar servidor
 app.listen(3000, () => console.log("Webhook ejecutándose en puerto 3000"));
 
 
