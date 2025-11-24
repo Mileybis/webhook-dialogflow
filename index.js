@@ -132,5 +132,3 @@ app.post("/webhook", async (req, res) => {
 
 // ------------------- SERVIDOR -------------------
 app.listen(3000, () => console.log("Webhook en puerto 3000"));
-
-
