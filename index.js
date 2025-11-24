@@ -80,11 +80,11 @@ app.post("/webhook", async (req, res) => {
     return res.json({ fulfillmentText: respuesta });
   }
 
-  // ------------------- ELIMINAR (ÚNICO BLOQUE) -------------------
+  // ------------------- ELIMINAR (ÚNICO INTENT) -------------------
   if (intent === "EliminarTarea") {
     const nombreTarea = req.body.queryResult.parameters.tarea;
 
-    // Si no dieron nombre → mostrar lista
+    // Si NO dieron nombre, listar tareas
     if (!nombreTarea || nombreTarea.trim() === "") {
       const snapshot = await db.collection("tareas").get();
 
@@ -102,17 +102,11 @@ app.post("/webhook", async (req, res) => {
       });
 
       return res.json({
-        fulfillmentText: lista,
-        outputContexts: [
-          {
-            name: `${req.body.session}/contexts/esperando_eliminar`,
-            lifespanCount: 5
-          }
-        ]
+        fulfillmentText: lista
       });
     }
 
-    // Si ya dieron nombre → eliminar
+    // Si el usuario sí dijo nombre → eliminar
     const snapshot = await db
       .collection("tareas")
       .where("tarea", "==", nombreTarea)
@@ -124,6 +118,7 @@ app.post("/webhook", async (req, res) => {
       });
     }
 
+    // Eliminar todas las coincidencias
     snapshot.forEach((doc) => doc.ref.delete());
 
     return res.json({
