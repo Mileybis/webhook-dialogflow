@@ -2,7 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const admin = require("firebase-admin");
 
-// Cargar clave desde variable de entorno
+// Cargar clave desde Render (variable FIREBASE_KEY)
 const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
 
 admin.initializeApp({
@@ -10,148 +10,132 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-
 const app = express();
 app.use(bodyParser.json());
 
-// Función para formatear fecha
-function formatearFecha(fechaISO) {
-  if (!fechaISO) return "";
-  const fecha = new Date(fechaISO);
-  return fecha.toLocaleDateString("es-PA", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+// -------------------- FORMATOS --------------------
+
+// FORMATEAR FECHA A DD/MM/YYYY
+function normalizarFecha(textoFecha) {
+  try {
+    const fecha = new Date(textoFecha);
+    if (isNaN(fecha)) return textoFecha;
+
+    const dia = String(fecha.getDate()).padStart(2, "0");
+    const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+    const year = fecha.getFullYear();
+
+    return `${dia}/${mes}/${year}`;
+  } catch {
+    return textoFecha;
+  }
 }
 
+// Mantener hora tal como la diga el usuario
+function normalizarHora(textoHora) {
+  return textoHora;
+}
+
+// -------------------- WEBHOOK --------------------
 app.post("/webhook", async (req, res) => {
   const intent = req.body.queryResult.intent.displayName;
-  const params = req.body.queryResult.parameters;
-  const contexts = req.body.queryResult.outputContexts;
 
-  // ---------------------------------------
-  //  INTENT: CrearTarea
-  // ---------------------------------------
+  // ------------------- CREAR TAREA -------------------
   if (intent === "CrearTarea") {
-    let tarea = params.tarea;
-    let fecha = params.fecha;
-    let hora = params.hora.trim().toLowerCase();
+    let tarea = req.body.queryResult.parameters.tarea;
+    let fecha = req.body.queryResult.parameters.fecha;
+    let hora = req.body.queryResult.parameters.hora;
 
-    // Detectar si ya trae am/pm
-    const tieneAMPM = hora.includes("am") || hora.includes("pm");
-
-    if (!tieneAMPM) {
-      // Guardar temporalmente en contexto
-      return res.json({
-        fulfillmentText: `¿Quieres decir ${hora} *am* o *pm*?`,
-        outputContexts: [
-          {
-            name: `${req.body.session}/contexts/esperar_amm_pm`,
-            lifespanCount: 3,
-            parameters: { tarea, fecha, hora },
-          },
-        ],
-      });
-    }
-
-    // Guardar cuando hora ya tiene AM/PM
-    await db.collection("tareas").add({ tarea, fecha, hora });
-
-    return res.json({
-      fulfillmentText: `Tarea guardada: ${tarea} — ${formatearFecha(
-        fecha
-      )} ${hora}`,
-    });
-  }
-
-  // ---------------------------------------
-  //  RESPUESTA del usuario: "am" o "pm"
-  // ---------------------------------------
-  if (intent === "ElegirAMPM") {
-    let ctx = contexts.find((c) => c.name.includes("esperar_amm_pm"));
-
-    if (!ctx) {
-      return res.json({
-        fulfillmentText: "No entendí, intenta de nuevo.",
-      });
-    }
-
-    let { tarea, fecha, hora } = ctx.parameters;
-    let respuesta = req.body.queryResult.queryText.toLowerCase();
-
-    if (!["am", "pm"].includes(respuesta))
-      return res.json({
-        fulfillmentText: "Por favor responde solo *am* o *pm*.",
-      });
-
-    let horaCompleta = `${hora} ${respuesta}`;
+    fecha = normalizarFecha(fecha);
+    hora = normalizarHora(hora);
 
     await db.collection("tareas").add({
       tarea,
       fecha,
-      hora: horaCompleta,
+      hora
     });
 
     return res.json({
-      fulfillmentText: `Perfecto, tarea guardada: ${tarea} — ${formatearFecha(
-        fecha
-      )} ${horaCompleta}`,
+      fulfillmentText: `Tarea registrada correctamente:\n• ${tarea} — ${fecha} ${hora}`
     });
   }
 
-  // ---------------------------------------
-  //  INTENT: VerTareas
-  // ---------------------------------------
+  // ------------------- VER TAREAS -------------------
   if (intent === "VerTareas") {
     const snapshot = await db.collection("tareas").get();
 
     if (snapshot.empty) {
       return res.json({
-        fulfillmentText: "No tienes tareas guardadas.",
+        fulfillmentText: "No tienes tareas guardadas."
       });
     }
 
     let respuesta = "Estas son tus tareas:\n";
 
-    snapshot.forEach((doc) => {
+    snapshot.forEach(doc => {
       const d = doc.data();
-      respuesta += `• ${d.tarea} — ${formatearFecha(d.fecha)} ${d.hora}\n`;
+      respuesta += `• ${d.tarea} — ${d.fecha} ${d.hora}\n`;
     });
 
     return res.json({ fulfillmentText: respuesta });
   }
 
-  // ---------------------------------------
-  //  INTENT: EliminarTarea
-  // ---------------------------------------
+  // ------------------- ELIMINAR (ÚNICO BLOQUE) -------------------
   if (intent === "EliminarTarea") {
-    const tarea = params.tarea;
+    const nombreTarea = req.body.queryResult.parameters.tarea;
 
+    // Si no dieron nombre → mostrar lista
+    if (!nombreTarea || nombreTarea.trim() === "") {
+      const snapshot = await db.collection("tareas").get();
+
+      if (snapshot.empty) {
+        return res.json({
+          fulfillmentText: "No tienes tareas guardadas para eliminar."
+        });
+      }
+
+      let lista = "Estas son tus tareas. Di el nombre exacto de la que deseas eliminar:\n";
+
+      snapshot.forEach((doc) => {
+        const t = doc.data();
+        lista += `• ${t.tarea} — ${t.fecha} ${t.hora}\n`;
+      });
+
+      return res.json({
+        fulfillmentText: lista,
+        outputContexts: [
+          {
+            name: `${req.body.session}/contexts/esperando_eliminar`,
+            lifespanCount: 5
+          }
+        ]
+      });
+    }
+
+    // Si ya dieron nombre → eliminar
     const snapshot = await db
       .collection("tareas")
-      .where("tarea", "==", tarea)
+      .where("tarea", "==", nombreTarea)
       .get();
 
     if (snapshot.empty) {
       return res.json({
-        fulfillmentText: `No encontré la tarea: ${tarea}`,
+        fulfillmentText: `No encontré la tarea "${nombreTarea}". Asegúrate de decir el nombre exacto.`
       });
     }
 
     snapshot.forEach((doc) => doc.ref.delete());
 
     return res.json({
-      fulfillmentText: `He eliminado la tarea: ${tarea}`,
+      fulfillmentText: `Tarea "${nombreTarea}" eliminada correctamente.`
     });
   }
 
+  // ------------------- ERROR -------------------
   res.json({ fulfillmentText: "No entendí tu solicitud." });
 });
 
-// Iniciar servidor
-app.listen(3000, () => console.log("Webhook ejecutándose en puerto 3000"));
-
-
+// ------------------- SERVIDOR -------------------
+app.listen(3000, () => console.log("Webhook en puerto 3000"));
 
 
