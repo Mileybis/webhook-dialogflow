@@ -188,7 +188,7 @@ app.post("/webhook", async (req, res) => {
 
 
   // VER TAREAS
-  if (intent === "VerTareas") {
+   if (intent === "VerTareas") {
   const s = await db.collection("tareas").get();
 
   if (s.empty) {
@@ -198,16 +198,17 @@ app.post("/webhook", async (req, res) => {
   }
 
   let r = "Tareas registradas\n\n";
-  let i = 1;
 
+  let i = 1;
   s.forEach(doc => {
     const d = doc.data();
 
     r += `${i}. ${d.tarea}\n`;
     r += `   Fecha: ${d.fecha}\n`;
     r += `   Hora: ${d.hora}\n`;
-    r += `   Estado: ${d.estado}\n\n`;
-    r += `\u200B\n`;
+    r += `   Estado: ${d.estado}\n`;
+    r += `-----------------------------------\n`;   // Separador visible
+    r += `\n`;  
 
     i++;
   });
@@ -463,5 +464,6 @@ app.post("/webhook", async (req, res) => {
 
 // SERVIDOR
 app.listen(3000, () => console.log("Webhook en puerto 3000"));
+
 
 
