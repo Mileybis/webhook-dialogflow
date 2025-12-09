@@ -15,20 +15,98 @@ app.use(bodyParser.json());
 
 // ======================= FORMATOS =======================
 
-// Convierte texto de fecha a DD/MM/YYYY
-function normalizarFecha(textoFecha) {
-  try {
-    const fecha = new Date(textoFecha);
-    if (isNaN(fecha)) return textoFecha;
+// Formatear un objeto Date a "DD/MM/YYYY"
+function formatearFecha(fecha) {
+  const dia = String(fecha.getDate()).padStart(2, "0");
+  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+  const year = fecha.getFullYear();
+  return `${dia}/${mes}/${year}`;
+}
 
-    const dia = String(fecha.getDate()).padStart(2, "0");
-    const mes = String(fecha.getMonth() + 1).padStart(2, "0");
-    const year = fecha.getFullYear();
+// Palabras que NO aceptamos como fecha
+const FECHAS_INVALIDAS = [
+  "hoy", "mañana", "pasado mañana",
+  "lunes", "martes", "miercoles", "miércoles",
+  "jueves", "viernes", "sabado", "sábado",
+  "domingo"
+];
 
-    return `${dia}/${mes}/${year}`;
-  } catch {
-    return textoFecha;
+// Intenta convertir texto libre a una fecha real y normalizada
+// Acepta:
+//  - "10/12/2025", "10-12-25"
+//  - "10 de diciembre de 2025", "10 de diciembre 2025"
+function parsearFechaLibre(texto) {
+  if (!texto) return null;
+  let t = texto.toLowerCase().trim();
+
+  // Rechazar palabras tipo "viernes", "mañana", etc.
+  if (FECHAS_INVALIDAS.includes(t)) return null;
+
+  // ----- CASO 1: formato numérico dd/mm/aa(aa) -----
+  const numMatch = t.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (numMatch) {
+    let dia = parseInt(numMatch[1], 10);
+    let mes = parseInt(numMatch[2], 10);
+    let year = parseInt(numMatch[3], 10);
+    if (year < 100) {
+      year = 2000 + year; // 25 -> 2025
+    }
+    const fecha = new Date(year, mes - 1, dia);
+    if (isNaN(fecha)) return null;
+    return {
+      date: fecha,
+      texto: formatearFecha(fecha)
+    };
   }
+
+  // ----- CASO 2: formato texto "10 de diciembre de 2025" -----
+  const meses = {
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "setiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12
+  };
+
+  const txtMatch = t.match(
+    /^(\d{1,2})\s*(de)?\s*([a-zñ]+)\s*(de|del)?\s*(\d{2,4})?$/
+  );
+  if (txtMatch) {
+    let dia = parseInt(txtMatch[1], 10);
+    let mesNombre = txtMatch[3];
+    let yearStr = txtMatch[5];
+
+    const mes = meses[mesNombre];
+    if (!mes) return null;
+
+    let year;
+    if (!yearStr) {
+      // Si no dice año, asumimos año actual
+      year = new Date().getFullYear();
+    } else {
+      year = parseInt(yearStr, 10);
+      if (year < 100) year = 2000 + year;
+    }
+
+    const fecha = new Date(year, mes - 1, dia);
+    if (isNaN(fecha)) return null;
+
+    return {
+      date: fecha,
+      texto: formatearFecha(fecha)
+    };
+  }
+
+  // Si no se pudo interpretar
+  return null;
 }
 
 // Mantener hora como texto
@@ -36,17 +114,44 @@ function normalizarHora(hora) {
   return hora;
 }
 
-// Convertir fecha DD/MM/YYYY + hora a objeto Date()
+// Convertir fecha "DD/MM/YYYY" + hora a objeto Date()
 function convertirAFecha(fechaTexto, horaTexto = "00:00") {
   try {
+    if (!fechaTexto) return null;
     const partes = fechaTexto.split("/");
-    const dia = partes[0];
-    const mes = partes[1];
-    const year = partes[2];
-    return new Date(`${year}-${mes}-${dia} ${horaTexto}`);
+    if (partes.length !== 3) return null;
+
+    const dia = parseInt(partes[0], 10);
+    const mes = parseInt(partes[1], 10);
+    const year = parseInt(partes[2], 10);
+
+    if (isNaN(dia) || isNaN(mes) || isNaN(year)) return null;
+
+    const fecha = new Date(year, mes - 1, dia);
+    if (isNaN(fecha)) return null;
+
+    // Si quieres usar la hora, puedes parsearla mejor,
+    // de momento solo la concatenamos simple:
+    if (horaTexto && typeof horaTexto === "string") {
+      const horaMatch = horaTexto.match(/(\d{1,2})/);
+      if (horaMatch) {
+        const h = parseInt(horaMatch[1], 10);
+        fecha.setHours(h);
+      }
+    }
+
+    return fecha;
   } catch {
     return null;
   }
+}
+
+// Determinar si un estado equivale a "completado"
+function esEstadoCompletado(estado) {
+  if (!estado) return false;
+  const e = estado.toString().toLowerCase().trim();
+  return ["completada", "completado", "finalizada", "finalizado", "terminada", "terminado"]
+    .includes(e);
 }
 
 // ======================= WEBHOOK =======================
@@ -58,22 +163,29 @@ app.post("/webhook", async (req, res) => {
   // ============== CREAR TAREA ==========================
   // =====================================================
   if (intent === "CrearTarea") {
-    let tarea = params.tarea;
-    let fecha = params.fecha;
-    let hora = params.hora;
+    const tarea = params.tarea;
+    const fechaBruta = params.fecha;
+    const hora = params.hora;
 
-    fecha = normalizarFecha(fecha);
-    hora = normalizarHora(hora);
+    const parsed = parsearFechaLibre(fechaBruta);
+    if (!parsed) {
+      return res.json({
+        fulfillmentText:
+          "Para registrar la tarea necesito una *fecha completa*.\nEjemplo: `10 de diciembre de 2025` o `10/12/2025`."
+      });
+    }
+
+    const fecha = parsed.texto;
 
     await db.collection("tareas").add({
       tarea,
       fecha,
-      hora,
+      hora: normalizarHora(hora),
       estado: "pendiente"
     });
 
     return res.json({
-      fulfillmentText: `Tarea registrada:\n• ${tarea} — ${fecha} ${hora}`
+      fulfillmentText: `Tarea registrada:\n• ${tarea} — ${fecha} ${hora} — (pendiente)`
     });
   }
 
@@ -167,62 +279,72 @@ app.post("/webhook", async (req, res) => {
   // =====================================================
   // =============== MODIFICAR TAREA =====================
   // =====================================================
-  // =============== MODIFICAR TAREA =====================
   if (intent === "ModificarTarea") {
-  const nombre = params.tarea;
-  const nuevaFecha = params.fecha;
-  const nuevaHora = params.hora;
+    const nombre = params.tarea;
+    const nuevaFechaBruta = params.fecha;
+    const nuevaHora = params.hora;
 
-  // Si NO hay fecha ni hora, solo guiamos al usuario
-  const sinFecha = !nuevaFecha || nuevaFecha.trim() === "";
-  const sinHora  = !nuevaHora || nuevaHora.trim() === "";
+    const sinFecha = !nuevaFechaBruta || nuevaFechaBruta.trim() === "";
+    const sinHora = !nuevaHora || nuevaHora.trim() === "";
 
-  if (sinFecha && sinHora) {
+    if (sinFecha && sinHora) {
+      return res.json({
+        fulfillmentText:
+          'Para modificar una tarea dime todo en una sola frase.\n' +
+          'Por ejemplo: "cambia la fecha de economía 2 al 10 de diciembre de 2025" o\n' +
+          '"cambia la hora de sistemas inteligentes a las 3 pm".'
+      });
+    }
+
+    const snapshot = await db
+      .collection("tareas")
+      .where("tarea", "==", nombre)
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({
+        fulfillmentText: `No encontré la tarea "${nombre}".`
+      });
+    }
+
+    let cambios = {};
+
+    if (!sinFecha) {
+      const parsed = parsearFechaLibre(nuevaFechaBruta);
+      if (!parsed) {
+        return res.json({
+          fulfillmentText:
+            "Para modificar la fecha necesito una *fecha completa*.\nEjemplo: `11 de diciembre de 2025` o `11/12/2025`."
+        });
+      }
+      cambios.fecha = parsed.texto;
+    }
+
+    if (!sinHora) {
+      cambios.hora = normalizarHora(nuevaHora);
+    }
+
+    snapshot.forEach(doc => doc.ref.update(cambios));
+
     return res.json({
-      fulfillmentText:
-        'Para modificar una tarea dime todo en una sola frase.\n' +
-        'Por ejemplo: "cambia la fecha de economía 2 al 10 de diciembre" o\n' +
-        '"cambia la hora de sistemas inteligentes a las 3 pm".'
+      fulfillmentText: `La tarea "${nombre}" fue modificada correctamente.`
     });
   }
-
-  const snapshot = await db
-    .collection("tareas")
-    .where("tarea", "==", nombre)
-    .get();
-
-  if (snapshot.empty) {
-    return res.json({
-      fulfillmentText: `No encontré la tarea "${nombre}".`
-    });
-  }
-
-  snapshot.forEach(doc => {
-    const cambios = {};
-    if (!sinFecha) cambios.fecha = normalizarFecha(nuevaFecha);
-    if (!sinHora)  cambios.hora  = normalizarHora(nuevaHora);
-    doc.ref.update(cambios);
-  });
-
-  return res.json({
-    fulfillmentText: `La tarea "${nombre}" fue modificada correctamente.`
-  });
-}
-
-
 
   // =====================================================
   // ================= RECORDATORIOS =====================
   // =====================================================
   if (intent === "Recordatorios") {
-    const hoy = normalizarFecha("hoy");
+    const hoyDate = new Date();
+    const hoyTexto = formatearFecha(hoyDate);
+
     const snapshot = await db.collection("tareas").get();
 
     let tareasHoy = [];
 
     snapshot.forEach(doc => {
       const d = doc.data();
-      if (d.fecha === hoy && d.estado !== "completada") {
+      if (d.fecha === hoyTexto && !esEstadoCompletado(d.estado)) {
         tareasHoy.push(d);
       }
     });
@@ -235,7 +357,7 @@ app.post("/webhook", async (req, res) => {
 
     let respuesta = "Estas son tus tareas para hoy:\n";
     tareasHoy.forEach(t => {
-      respuesta += `• ${t.tarea} — ${t.hora}\n`;
+      respuesta += `• ${t.tarea} — ${t.hora} — (${t.estado})\n`;
     });
 
     return res.json({ fulfillmentText: respuesta });
@@ -248,17 +370,25 @@ app.post("/webhook", async (req, res) => {
     const snapshot = await db.collection("tareas").get();
     const hoy = new Date();
 
+    // Lunes de esta semana
     const semanaInicio = new Date(hoy);
-    semanaInicio.setDate(hoy.getDate() - hoy.getDay() + 1);
+    const diaSemana = hoy.getDay(); // 0 = domingo, 1 = lunes...
+    const offset = diaSemana === 0 ? -6 : 1 - diaSemana; // para que lunes sea inicio
+    semanaInicio.setDate(hoy.getDate() + offset);
+    semanaInicio.setHours(0, 0, 0, 0);
 
+    // Domingo de esta semana
     const semanaFin = new Date(semanaInicio);
     semanaFin.setDate(semanaInicio.getDate() + 6);
+    semanaFin.setHours(23, 59, 59, 999);
 
     let lista = [];
 
     snapshot.forEach(doc => {
       const d = doc.data();
       const fechaReal = convertirAFecha(d.fecha, d.hora);
+
+      if (!fechaReal) return; // ignorar tareas con fecha rara
 
       if (fechaReal >= semanaInicio && fechaReal <= semanaFin) {
         lista.push(d);
@@ -267,7 +397,7 @@ app.post("/webhook", async (req, res) => {
 
     if (lista.length === 0) {
       return res.json({
-        fulfillmentText: "No tienes tareas esta semana 🙌"
+        fulfillmentText: "No tienes tareas registradas para esta semana 🙌"
       });
     }
 
@@ -284,28 +414,37 @@ app.post("/webhook", async (req, res) => {
   // =====================================================
   if (intent === "RecomendarTarea") {
     const snapshot = await db.collection("tareas").get();
-    let pendientes = [];
+    let candidatos = [];
 
     snapshot.forEach(doc => {
       const d = doc.data();
-      if (d.estado !== "completada") {
-        const fechaOrden = convertirAFecha(d.fecha, d.hora);
-        pendientes.push({ ...d, fechaOrden });
-      }
+      if (esEstadoCompletado(d.estado)) return; // ignorar completadas
+
+      const fechaOrden = convertirAFecha(d.fecha, d.hora);
+      if (!fechaOrden) return; // ignorar si no tiene fecha válida
+
+      candidatos.push({
+        ...d,
+        fechaOrden
+      });
     });
 
-    if (pendientes.length === 0) {
+    if (candidatos.length === 0) {
       return res.json({
         fulfillmentText: "No tienes tareas pendientes 🎉"
       });
     }
 
-    pendientes.sort((a, b) => a.fechaOrden - b.fechaOrden);
+    // Ordenar por fecha más cercana
+    candidatos.sort((a, b) => a.fechaOrden - b.fechaOrden);
 
-    const t = pendientes[0];
+    const t = candidatos[0];
 
     return res.json({
-      fulfillmentText: `Te recomiendo realizar primero:\n• ${t.tarea} — ${t.fecha} ${t.hora}\nEs la más urgente.`
+      fulfillmentText:
+        `Te recomiendo realizar primero:\n` +
+        `• ${t.tarea} — ${t.fecha} ${t.hora} — (${t.estado})\n` +
+        `Es la tarea más cercana en el tiempo.`
     });
   }
 
@@ -319,6 +458,3 @@ app.post("/webhook", async (req, res) => {
 
 // ======================= SERVIDOR =======================
 app.listen(3000, () => console.log("Webhook en puerto 3000"));
-
-
-
