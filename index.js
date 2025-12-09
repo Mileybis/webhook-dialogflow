@@ -167,37 +167,50 @@ app.post("/webhook", async (req, res) => {
   // =====================================================
   // =============== MODIFICAR TAREA =====================
   // =====================================================
-  if (intent === "ModificarTarea") {
-    const nombre = params.tarea;
-    const nuevaFecha = params.fecha;
-    const nuevaHora = params.hora;
+  // =============== MODIFICAR TAREA =====================
+if (intent === "ModificarTarea") {
+  const nombre = params.tarea;
+  const nuevaFecha = params.fecha;
+  const nuevaHora = params.hora;
 
-    const snapshot = await db
-      .collection("tareas")
-      .where("tarea", "==", nombre)
-      .get();
+  // Si NO hay fecha ni hora, no modificamos nada:
+  // solo guiamos al usuario con la pregunta que quieres.
+  const sinFecha = !nuevaFecha || nuevaFecha.trim() === "";
+  const sinHora  = !nuevaHora || nuevaHora.trim() === "";
 
-    if (snapshot.empty) {
-      return res.json({
-        fulfillmentText: `No encontré la tarea "${nombre}".`
-      });
-    }
-
-    snapshot.forEach(doc => {
-      const cambios = {};
-      if (nuevaFecha && nuevaFecha.trim() !== "")
-        cambios.fecha = normalizarFecha(nuevaFecha);
-
-      if (nuevaHora && nuevaHora.trim() !== "")
-        cambios.hora = normalizarHora(nuevaHora);
-
-      doc.ref.update(cambios);
-    });
-
+  if (sinFecha && sinHora) {
     return res.json({
-      fulfillmentText: `La tarea "${nombre}" fue modificada correctamente.`
+      fulfillmentText:
+        '¿Qué quieres cambiar de la tarea? Puedo cambiar la *fecha* o la *hora*.\n' +
+        'Si quieres cambiar el *estado*, dime por ejemplo:\n' +
+        '"marca la tarea de SISTEMAS INTELIGENTES como completada".'
     });
   }
+
+  // Si sí hay algo que cambiar (fecha y/o hora), entonces buscamos la tarea
+  const snapshot = await db
+    .collection("tareas")
+    .where("tarea", "==", nombre)
+    .get();
+
+  if (snapshot.empty) {
+    return res.json({
+      fulfillmentText: `No encontré la tarea "${nombre}".`
+    });
+  }
+
+  snapshot.forEach(doc => {
+    const cambios = {};
+    if (!sinFecha) cambios.fecha = normalizarFecha(nuevaFecha);
+    if (!sinHora)  cambios.hora  = normalizarHora(nuevaHora);
+    doc.ref.update(cambios);
+  });
+
+  return res.json({
+    fulfillmentText: `La tarea "${nombre}" fue modificada correctamente.`
+  });
+}
+
 
   // =====================================================
   // ================= RECORDATORIOS =====================
@@ -307,4 +320,5 @@ app.post("/webhook", async (req, res) => {
 
 // ======================= SERVIDOR =======================
 app.listen(3000, () => console.log("Webhook en puerto 3000"));
+
 
