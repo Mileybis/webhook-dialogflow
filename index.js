@@ -188,32 +188,24 @@ app.post("/webhook", async (req, res) => {
 
 
   // VER TAREAS
-   if (intent === "VerTareas") {
-  const s = await db.collection("tareas").get();
+  if (intent === "VerTareas") {
+  const snapshot = await db.collection("tareas").get();
 
-  if (s.empty) {
+  if (snapshot.empty) {
     return res.json({
       fulfillmentText: "No tienes tareas registradas."
     });
   }
 
-  let r = "Tareas registradas\n\n";
+  let respuesta = "Tareas registradas:\n\n";
 
-  let i = 1;
-  s.forEach(doc => {
+  snapshot.forEach(doc => {
     const d = doc.data();
 
-    r += `${i}. ${d.tarea}\n`;
-    r += `   Fecha: ${d.fecha}\n`;
-    r += `   Hora: ${d.hora}\n`;
-    r += `   Estado: ${d.estado}\n`;
-    r += `-----------------------------------\n`;   // Separador visible
-    r += `\n`;  
-
-    i++;
+    respuesta += `• ${d.tarea} — ${d.fecha} — ${d.hora} — (${d.estado})\n`;
   });
 
-  return res.json({ fulfillmentText: r });
+  return res.json({ fulfillmentText: respuesta });
 }
 
 
@@ -464,6 +456,7 @@ app.post("/webhook", async (req, res) => {
 
 // SERVIDOR
 app.listen(3000, () => console.log("Webhook en puerto 3000"));
+
 
 
 
