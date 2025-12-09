@@ -13,7 +13,6 @@ const db = admin.firestore();
 const app = express();
 app.use(bodyParser.json());
 
-// ======================= FORMATOS =======================
 
 // Formatear un objeto Date a "DD/MM/YYYY"
 function formatearFecha(fecha) {
@@ -154,14 +153,12 @@ function esEstadoCompletado(estado) {
     .includes(e);
 }
 
-// ======================= WEBHOOK =======================
+//  WEBHOOK 
 app.post("/webhook", async (req, res) => {
   const intent = req.body.queryResult.intent.displayName;
   const params = req.body.queryResult.parameters;
 
-  // =====================================================
-  // ============== CREAR TAREA ==========================
-  // =====================================================
+  // CREAR TAREA
   if (intent === "CrearTarea") {
     const tarea = params.tarea;
     const fechaBruta = params.fecha;
@@ -171,7 +168,7 @@ app.post("/webhook", async (req, res) => {
     if (!parsed) {
       return res.json({
         fulfillmentText:
-          "Para registrar la tarea necesito una *fecha completa*.\nEjemplo: `10 de diciembre de 2025` o `10/12/2025`."
+          "Error en registrar la tarea necesito una fecha completa, Por favor crea la tarea de nuevo.\nEjemplo: `10 de diciembre de 2025` o `10/12/2025`."
       });
     }
 
@@ -189,29 +186,37 @@ app.post("/webhook", async (req, res) => {
     });
   }
 
-  // =====================================================
-  // ============== VER TAREAS ===========================
-  // =====================================================
+
+  // VER TAREAS
   if (intent === "VerTareas") {
-    const snapshot = await db.collection("tareas").get();
+  const s = await db.collection("tareas").get();
 
-    if (snapshot.empty) {
-      return res.json({ fulfillmentText: "No tienes tareas guardadas." });
-    }
-
-    let respuesta = "Estas son tus tareas:\n";
-
-    snapshot.forEach(doc => {
-      const d = doc.data();
-      respuesta += `• ${d.tarea} — ${d.fecha} ${d.hora} — (${d.estado})\n`;
+  if (s.empty) {
+    return res.json({
+      fulfillmentText: "No tienes tareas registradas."
     });
-
-    return res.json({ fulfillmentText: respuesta });
   }
 
-  // =====================================================
-  // ============= ELIMINAR TAREA ========================
-  // =====================================================
+  let r = "Tareas registradas\n\n";
+  let i = 1;
+
+  s.forEach(doc => {
+    const d = doc.data();
+
+    r += `${i}. ${d.tarea}\n`;
+    r += `   Fecha: ${d.fecha}\n`;
+    r += `   Hora: ${d.hora}\n`;
+    r += `   Estado: ${d.estado}\n\n`;
+
+    i++;
+  });
+
+  return res.json({ fulfillmentText: r });
+}
+
+
+  // ELIMINAR TAREA
+  
   if (intent === "EliminarTarea") {
     const nombreTarea = params.tarea;
 
@@ -251,9 +256,9 @@ app.post("/webhook", async (req, res) => {
     });
   }
 
-  // =====================================================
-  // ============= CAMBIAR ESTADO TAREA =================
-  // =====================================================
+
+  //  CAMBIAR ESTADO TAREA
+
   if (intent === "CambiarEstadoTarea") {
     const nombre = params.tarea;
     const nuevoEstado = params.estado;
@@ -276,9 +281,9 @@ app.post("/webhook", async (req, res) => {
     });
   }
 
-  // =====================================================
-  // =============== MODIFICAR TAREA =====================
-  // =====================================================
+
+  // MODIFICAR TAREA
+
   if (intent === "ModificarTarea") {
     const nombre = params.tarea;
     const nuevaFechaBruta = params.fecha;
@@ -331,9 +336,9 @@ app.post("/webhook", async (req, res) => {
     });
   }
 
-  // =====================================================
-  // ================= RECORDATORIOS =====================
-  // =====================================================
+
+  //  RECORDATORIOS 
+ 
   if (intent === "Recordatorios") {
     const hoyDate = new Date();
     const hoyTexto = formatearFecha(hoyDate);
@@ -363,9 +368,9 @@ app.post("/webhook", async (req, res) => {
     return res.json({ fulfillmentText: respuesta });
   }
 
-  // =====================================================
-  // ================= RESUMEN SEMANAL ==================
-  // =====================================================
+
+  // RESUMEN SEMANAL 
+
   if (intent === "ResumenSemanal") {
     const snapshot = await db.collection("tareas").get();
     const hoy = new Date();
@@ -409,9 +414,9 @@ app.post("/webhook", async (req, res) => {
     return res.json({ fulfillmentText: respuesta });
   }
 
-  // =====================================================
-  // ================== RECOMENDAR TAREA =================
-  // =====================================================
+
+  // RECOMENDAR TAREA 
+  
   if (intent === "RecomendarTarea") {
     const snapshot = await db.collection("tareas").get();
     let candidatos = [];
@@ -448,13 +453,13 @@ app.post("/webhook", async (req, res) => {
     });
   }
 
-  // =====================================================
-  // ================== DEFAULT ==========================
-  // =====================================================
+
+  // DEFAULT 
   return res.json({
     fulfillmentText: "No entendí tu solicitud."
   });
 });
 
-// ======================= SERVIDOR =======================
+// SERVIDOR
 app.listen(3000, () => console.log("Webhook en puerto 3000"));
+
