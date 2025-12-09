@@ -207,6 +207,7 @@ app.post("/webhook", async (req, res) => {
     r += `   Fecha: ${d.fecha}\n`;
     r += `   Hora: ${d.hora}\n`;
     r += `   Estado: ${d.estado}\n\n`;
+    r += `\u200B\n`;
 
     i++;
   });
@@ -462,4 +463,5 @@ app.post("/webhook", async (req, res) => {
 
 // SERVIDOR
 app.listen(3000, () => console.log("Webhook en puerto 3000"));
+
 
