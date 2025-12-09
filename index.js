@@ -168,26 +168,24 @@ app.post("/webhook", async (req, res) => {
   // =============== MODIFICAR TAREA =====================
   // =====================================================
   // =============== MODIFICAR TAREA =====================
-if (intent === "ModificarTarea") {
+  if (intent === "ModificarTarea") {
   const nombre = params.tarea;
   const nuevaFecha = params.fecha;
   const nuevaHora = params.hora;
 
-  // Si NO hay fecha ni hora, no modificamos nada:
-  // solo guiamos al usuario con la pregunta que quieres.
+  // Si NO hay fecha ni hora, solo guiamos al usuario
   const sinFecha = !nuevaFecha || nuevaFecha.trim() === "";
   const sinHora  = !nuevaHora || nuevaHora.trim() === "";
 
   if (sinFecha && sinHora) {
     return res.json({
       fulfillmentText:
-        '¿Qué quieres cambiar de la tarea? Puedo cambiar la *fecha* o la *hora*.\n' +
-        'Si quieres cambiar el *estado*, dime por ejemplo:\n' +
-        '"marca la tarea de SISTEMAS INTELIGENTES como completada".'
+        'Para modificar una tarea dime todo en una sola frase.\n' +
+        'Por ejemplo: "cambia la fecha de economía 2 al 10 de diciembre" o\n' +
+        '"cambia la hora de sistemas inteligentes a las 3 pm".'
     });
   }
 
-  // Si sí hay algo que cambiar (fecha y/o hora), entonces buscamos la tarea
   const snapshot = await db
     .collection("tareas")
     .where("tarea", "==", nombre)
@@ -210,6 +208,7 @@ if (intent === "ModificarTarea") {
     fulfillmentText: `La tarea "${nombre}" fue modificada correctamente.`
   });
 }
+
 
 
   // =====================================================
@@ -320,5 +319,6 @@ if (intent === "ModificarTarea") {
 
 // ======================= SERVIDOR =======================
 app.listen(3000, () => console.log("Webhook en puerto 3000"));
+
 
 
